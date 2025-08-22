@@ -1,16 +1,31 @@
 // src/lib/archive.ts
-// Lightweight client-side archive store
-export type ArchiveState = Set<number>;
+// SSR-safe archive store (localStorage guarded)
 
+export type ArchiveState = Set<number>;
 const KEY = 'acb_archived';
 
-export function loadArchived(): ArchiveState {
+function canUseLS() {
+  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+}
+
+function readArr(): number[] {
+  if (!canUseLS()) return [];
   try {
-    const arr = JSON.parse(localStorage.getItem(KEY) || '[]') as number[];
-    return new Set<number>(arr);
+    return JSON.parse(localStorage.getItem(KEY) || '[]') as number[];
   } catch {
-    return new Set<number>();
+    return [];
   }
+}
+
+function writeArr(ids: number[]) {
+  if (!canUseLS()) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(ids));
+  } catch {}
+}
+
+export function loadArchived(): ArchiveState {
+  return new Set<number>(readArr());
 }
 
 export function isArchived(id: number): boolean {
@@ -18,15 +33,14 @@ export function isArchived(id: number): boolean {
 }
 
 export function toggleArchive(id: number): boolean {
-  const s = loadArchived();
-  const had = s.has(id);
-  if (had) s.delete(id); else s.add(id);
-  localStorage.setItem(KEY, JSON.stringify([...s]));
-  return !had; // returns current archived state
+  const set = loadArchived();
+  if (set.has(id)) set.delete(id); else set.add(id);
+  writeArr([...set]);
+  return set.has(id);
 }
 
 export function setArchived(ids: number[], archived: boolean) {
-  const s = loadArchived();
-  ids.forEach(id => archived ? s.add(id) : s.delete(id));
-  localStorage.setItem(KEY, JSON.stringify([...s]));
+  const set = loadArchived();
+  ids.forEach(id => archived ? set.add(id) : set.delete(id));
+  writeArr([...set]);
 }

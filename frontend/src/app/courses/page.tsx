@@ -29,9 +29,10 @@ type SortKey = 'title-asc'|'title-desc'|'status';
 type TabKey = 'all'|'progress'|'complete'|'generating';
 
 function applyDensity(mode:'cozy'|'compact'){
+  // runs only in effect on client
   const b = document.body;
   if (mode === 'compact') b.classList.add('density-compact'); else b.classList.remove('density-compact');
-  localStorage.setItem('acb_density', mode);
+  try { localStorage.setItem('acb_density', mode); } catch {}
 }
 
 export default function CoursesPage() {
@@ -43,11 +44,17 @@ export default function CoursesPage() {
   const [onlyFavs, setOnlyFavs] = useState(false);
   const [favs, toggleFav] = useFavs();
   const [tab, setTab] = useState<TabKey>('all');
-  const [density, setDensity] = useState<'cozy'|'compact'>(() => (localStorage.getItem('acb_density') as any) || 'cozy');
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [showArchived, setShowArchived] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [allTagOptions, setAllTagOptions] = useState<string[]>([]);
+
+  // IMPORTANT: don't read localStorage during render/SSR
+  const [density, setDensity] = useState<'cozy'|'compact'>('cozy');
+
+  useEffect(() => {
+    // hydrate initial density from localStorage on client
+    try {
+      const saved = localStorage.getItem('acb_density') as 'cozy'|'compact'|null;
+      if (saved === 'cozy' || saved === 'compact') setDensity(saved);
+    } catch {}
+  }, []);
 
   useEffect(()=> applyDensity(density), [density]);
 
@@ -72,7 +79,6 @@ export default function CoursesPage() {
         );
 
         if (mounted) setPercent(Object.fromEntries(pairs));
-        setAllTagOptions(allTags());
       } catch (e: any) {
         if (mounted) setErr(e?.message ?? 'Failed to load');
       }
@@ -81,10 +87,17 @@ export default function CoursesPage() {
     load();
     const off = subscribeProgress(load);
     return () => { mounted = false; off(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [allTagOptions, setAllTagOptions] = useState<string[]>([]);
+
+  useEffect(() => { setAllTagOptions(allTags()); }, [items]);
+
   const stats = useMemo(()=>{
+    // loadArchived() is SSR-safe now (returns empty set on server)
     let total = items.length, generating = 0, complete = 0, progress = 0, archived = 0;
     const archivedSet = loadArchived();
     for (const c of items){
@@ -150,7 +163,7 @@ export default function CoursesPage() {
     <main className="stack stack-lg">
       <div className="row" style={{justifyContent:'space-between'}}>
         <h1 className="h1">My Courses</h1>
-        <a className="btn ghost" href="/">Back to Builder</a>
+        <Link className="btn ghost" href="/">Back to Builder</Link>
       </div>
 
       {/* stats & controls */}
@@ -288,7 +301,7 @@ export default function CoursesPage() {
         <BulkBar ids={selectedIds} onClose={()=>setSelected(new Set())} />
       )}
 
-      <a className="fab" href="/">＋ New</a>
+      <Link className="fab" href="/">＋ New</Link>
     </main>
   );
 }

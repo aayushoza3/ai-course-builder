@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from urllib.parse import urlparse, urlunparse
 
@@ -26,9 +28,16 @@ _raw_backend = os.getenv("CELERY_RESULT_BACKEND") or _raw_broker
 broker_url = _force_db0(_raw_broker)
 result_backend = _force_db0(_raw_backend)
 
-app = Celery("app", broker=broker_url, backend=result_backend)
+# Build the Celery app and explicitly include the tasks module so the worker
+# registers our task name at import time.
+celery_app = Celery(
+    "ai_course_builder",
+    broker=broker_url,
+    backend=result_backend,
+    include=["app.tasks.generate_course"],
+)
 
-app.conf.update(
+celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     task_ignore_result=False,
     result_extended=True,
@@ -37,9 +46,12 @@ app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
+    task_default_queue="default",
+    task_routes={"app.tasks.generate_course.generate_course": {"queue": "default"}},
     timezone="UTC",
     enable_utc=True,
 )
 
-# What the rest of the code imports
-celery_app = app
+# Eager import ensures decorator side-effects register the task with Celery
+# even if autodiscovery is disabled.
+import app.tasks.generate_course  # noqa: F401

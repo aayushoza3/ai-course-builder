@@ -27,11 +27,7 @@ llm = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
 
 # ---- Tiny web helpers --------------------------------------------------
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (compatible; CourseBuilderBot/1.0; +https://example.local)"
-    )
-}
+HEADERS = {"User-Agent": ("Mozilla/5.0 (compatible; CourseBuilderBot/1.0; +https://example.local)")}
 
 
 def _fetch(
@@ -196,11 +192,7 @@ def _canonicalize_url(raw: str) -> Tuple[str, str]:
                 return can, f"yt:{vid}"
 
         # drop tracking params
-        q = [
-            (k, v)
-            for (k, v) in parse_qsl(p.query, keep_blank_values=True)
-            if k not in _TRACKING_KEYS
-        ]
+        q = [(k, v) for (k, v) in parse_qsl(p.query, keep_blank_values=True) if k not in _TRACKING_KEYS]
         p2 = p._replace(query=urlencode(q, doseq=True))
         canon = urlunparse(p2)
         return canon, canon
@@ -274,6 +266,7 @@ def _normalize_resources(raw: List[Dict[str, str]]) -> List[Dict[str, str]]:
     # unique again after cleaning
     return _dedupe_resources(norm)
 
+
 # ---- Lesson content generation ----------------------------------------
 
 
@@ -307,6 +300,7 @@ def gen_lesson_md(course_title: str, lesson_title: str) -> str:
         log.warning("gen_lesson_md failed for %s / %s: %s", course_title, lesson_title, e)
         return ""
 
+
 # ---- Outline generation ------------------------------------------------
 
 
@@ -337,11 +331,40 @@ def _build_outline(title: str) -> List[Dict[str, Any]]:
         log.warning("outline parse failed, falling back: %s", e)
 
     return [
-        {"title": "Introduction", "lessons": ["Course Overview", "Key Concepts", "Environment Setup"]},
-        {"title": "Core Skills", "lessons": ["Basics", "Working with Data", "Common Patterns"]},
-        {"title": "Applied Topics", "lessons": ["Case Study 1", "Case Study 2", "Best Practices"]},
-        {"title": "Wrap Up", "lessons": ["Project", "Next Steps", "Resources"]},
+        {
+            "title": "Introduction",
+            "lessons": [
+                "Course Overview",
+                "Key Concepts",
+                "Environment Setup",
+            ],
+        },
+        {
+            "title": "Core Skills",
+            "lessons": [
+                "Basics",
+                "Working with Data",
+                "Common Patterns",
+            ],
+        },
+        {
+            "title": "Applied Topics",
+            "lessons": [
+                "Case Study 1",
+                "Case Study 2",
+                "Best Practices",
+            ],
+        },
+        {
+            "title": "Wrap Up",
+            "lessons": [
+                "Project",
+                "Next Steps",
+                "Resources",
+            ],
+        },
     ]
+
 
 # ---- Cancellation helpers ---------------------------------------------
 
@@ -353,6 +376,7 @@ async def _ensure_not_canceled(db, course_id: int) -> None:
         return
     if getattr(course, "status", None) == "canceled":
         raise asyncio.CancelledError()
+
 
 # ---- Persistence -------------------------------------------------------
 
@@ -434,7 +458,11 @@ async def _persist(Session, course_id: int, title: str) -> None:
                 await _ensure_not_canceled(db, course_id)
 
                 content_md = gen_lesson_md(title, ltitle)
-                lesson = models.Lesson(module_id=module.id, title=ltitle, content_md=content_md)
+                lesson = models.Lesson(
+                    module_id=module.id,
+                    title=ltitle,
+                    content_md=content_md,
+                )
                 db.add(lesson)
                 await db.flush()
 
@@ -457,6 +485,7 @@ async def _persist(Session, course_id: int, title: str) -> None:
         if hasattr(course, "status"):
             course.status = "ready"
         await db.commit()
+
 
 # ---- Minimal status helpers -------------------------------------------
 
@@ -493,6 +522,7 @@ async def _mark_failed(Session, course_id: int, err: Exception) -> None:
         if hasattr(course, "last_error"):
             course.last_error = str(err)[:500]
         await db.commit()
+
 
 # ---- Celery task -------------------------------------------------------
 

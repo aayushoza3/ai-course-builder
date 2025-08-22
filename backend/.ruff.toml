@@ -3,10 +3,20 @@ line-length = 100
 target-version = "py312"
 
 [lint]
-select = ["E", "F"]
-fix = true
+# Core error/warning rules; include import sorting (I) if you want Ruff to flag it.
+select = ["E", "F", "I"]
 
-# Ignore "unused import" in generated migrations and tests
+# CI runner's Ruff is older; ignore rules that are noisy or clash with our startup pattern.
+extend-ignore = [
+  "E402",  # module level import not at top of file (env loading before imports)
+  "E741",  # ambiguous variable name like `l`, `O`, `I`
+]
+
 [lint.per-file-ignores]
+# Alembic migrations and tests often have unused imports by design
 "alembic/versions/*.py" = ["F401"]
 "tests/**/*.py" = ["F401"]
+
+# Project-specific: allow re-export pattern and a couple of unused imports
+"app/tasks/__init__.py" = ["F401"]
+"app/models.py" = ["F401"]

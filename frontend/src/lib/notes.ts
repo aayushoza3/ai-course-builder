@@ -1,24 +1,30 @@
-// src/lib/notes.ts
-const K = 'acb_notes'; // map: { "<courseId>:<lessonId>": "text" }
+// frontend/src/lib/notes.ts
+// SSR-safe per-lesson notes
 
-type MapT = Record<string,string>;
+type NoteMap = Record<number, Record<number, string>>; // courseId -> (lessonId -> note)
+const KEY = 'acb_notes';
 
-function read(): MapT{
-  try{
-    const raw = localStorage.getItem(K);
-    if (!raw) return {};
-    return JSON.parse(raw) as MapT;
-  } catch { return {}; }
+function canUseLS() {
+  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 }
-function write(m: MapT){ localStorage.setItem(K, JSON.stringify(m)); }
-
-export function getNote(courseId:number, lessonId:number){
-  const m = read();
-  return m[`${courseId}:${lessonId}`] ?? '';
+function read(): NoteMap {
+  if (!canUseLS()) return {};
+  try { return JSON.parse(localStorage.getItem(KEY) || '{}') as NoteMap; }
+  catch { return {}; }
 }
-export function setNote(courseId:number, lessonId:number, text:string){
+function write(map: NoteMap) {
+  if (!canUseLS()) return;
+  try { localStorage.setItem(KEY, JSON.stringify(map)); } catch {}
+}
+
+export function getNote(courseId: number, lessonId: number): string {
   const m = read();
-  if (text.trim()) m[`${courseId}:${lessonId}`] = text;
-  else delete m[`${courseId}:${lessonId}`];
+  return m[courseId]?.[lessonId] ?? '';
+}
+
+export function setNote(courseId: number, lessonId: number, text: string) {
+  const m = read();
+  m[courseId] = m[courseId] || {};
+  m[courseId][lessonId] = text;
   write(m);
 }

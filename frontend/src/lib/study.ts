@@ -1,54 +1,94 @@
 // src/lib/study.ts
-const KEY = 'acb_study_log';
+// SSR-safe study log utilities (timestamps in ms). Keeps the same public API.
+
+export const KEY = 'acb_study_log';
 
 export type StudyPoint = number; // epoch ms
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function logStudy(at = Date.now()){
-  if (typeof window === 'undefined') return;
-  try{
-    const arr: StudyPoint[] = JSON.parse(localStorage.getItem(KEY) || '[]');
-    arr.push(at);
+function canUseLS() {
+  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+}
+
+function read(): StudyPoint[] {
+  if (!canUseLS()) return [];
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as StudyPoint[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function write(arr: StudyPoint[]) {
+  if (!canUseLS()) return;
+  try {
     localStorage.setItem(KEY, JSON.stringify(arr));
-  }catch{}
+  } catch {}
 }
 
-export function getLog(): StudyPoint[]{
-  if (typeof window === 'undefined') return [];
-  try{ return JSON.parse(localStorage.getItem(KEY) || '[]'); }catch{ return []; }
+/** Log a study "touch" at the given time (defaults to now). */
+export function logStudy(at: number = Date.now()) {
+  const arr = read();
+  arr.push(at);
+  write(arr);
 }
 
-export function daysAgo(ts:number){
-  const day = 24*60*60*1000;
-  const d0 = new Date(); d0.setHours(0,0,0,0);
-  return Math.floor((d0.getTime()-ts)/day);
+/** Return the raw timestamp log (ms since epoch). */
+export function getLog(): StudyPoint[] {
+  return read();
 }
 
+/** Days ago from today (local midnight). */
+export function daysAgo(ts: number) {
+  const d0 = new Date();
+  d0.setHours(0, 0, 0, 0);
+  return Math.floor((d0.getTime() - ts) / DAY_MS);
+}
+
+/** Current streak in days (consecutive days with at least one touch), counting today. */
 export function streak(): number {
-  const log = getLog().sort((a,b)=>b-a);
+  const log = read();
   if (log.length === 0) return 0;
-  let s = 0;
-  const day = 24*60*60*1000;
-  let cur = new Date(); cur.setHours(0,0,0,0);
-  let cursor = cur.getTime(); // today start
-  let idx = 0;
 
-  while (true){
-    const has = log.slice(idx).some(t => t >= cursor && t < cursor+day);
-    if (!has) break;
+  // Build a set of day-start timestamps (local) that have at least one touch.
+  const daySet = new Set<number>();
+  for (const t of log) {
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    daySet.add(d.getTime());
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let cursor = today.getTime();
+  let s = 0;
+
+  // Count backwards until a day is missing.
+  while (daySet.has(cursor)) {
     s++;
-    cursor -= day;
+    cursor -= DAY_MS;
   }
   return s;
 }
 
-export function heatmap(n=84): number[] {
-  const log = getLog();
-  const day = 24*60*60*1000;
-  const d0 = new Date(); d0.setHours(0,0,0,0);
-  const buckets = Array.from({length:n}, (_,i)=>0);
-  for (const t of log){
-    const diff = Math.floor((d0.getTime() - (new Date(t).setHours(0,0,0,0))) / day);
+/**
+ * Heatmap bucket counts for the last `n` days.
+ * Index 0 => today, 1 => yesterday, etc.
+ */
+export function heatmap(n = 84): number[] {
+  const buckets = Array.from({ length: n }, () => 0);
+  if (n <= 0) return buckets;
+
+  const d0 = new Date();
+  d0.setHours(0, 0, 0, 0);
+  const startOfToday = d0.getTime();
+
+  for (const t of read()) {
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    const diff = Math.floor((startOfToday - d.getTime()) / DAY_MS);
     if (diff >= 0 && diff < n) buckets[diff] += 1;
   }
-  return buckets; // index 0 => today
+  return buckets;
 }

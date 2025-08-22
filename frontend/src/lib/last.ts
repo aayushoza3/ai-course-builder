@@ -1,17 +1,19 @@
-// src/lib/last.ts
-export type LastView = { courseId:number; courseTitle:string; lessonId?:number; lessonTitle?:string; at:number };
+// frontend/src/lib/last.ts
+// SSR-safe "last viewed" breadcrumb
 
 const KEY = 'acb_last';
 
-export function setLast(v: LastView){
-  if (typeof window === 'undefined') return;
-  try { localStorage.setItem(KEY, JSON.stringify({ ...v, at: Date.now() })); } catch {}
+function canUseLS() { return typeof window !== 'undefined' && typeof localStorage !== 'undefined'; }
+
+export function setLast(payload: unknown) {
+  if (!canUseLS()) return;
+  try { localStorage.setItem(KEY, JSON.stringify(payload)); } catch {}
 }
 
-export function getLast(): LastView | null {
-  if (typeof window === 'undefined') return null;
+export function getLast<T = unknown>(): T | null {
+  if (!canUseLS()) return null;
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as LastView) : null;
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch { return null; }
 }

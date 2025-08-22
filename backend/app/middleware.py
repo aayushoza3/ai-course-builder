@@ -8,6 +8,7 @@ import contextvars
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+from starlette.responses import JSONResponse
 
 # context var to inject request_id into all log lines
 request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -21,17 +22,33 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp):
         super().__init__(app)
         self.log = logging.getLogger("app.access")
+        self.err_log = logging.getLogger("app.error")
 
     async def dispatch(self, request: Request, call_next):
         rid = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = rid  # available to handlers
         token = request_id_ctx.set(rid)
         start = time.perf_counter()
+
+        response: Response | None = None
         try:
-            response: Response = await call_next(request)
+            response = await call_next(request)
+        except Exception:
+            # Log the original exception with stack trace and return a proper 500
+            self.err_log.exception("Unhandled error (request_id=%s)", rid)
+            response = JSONResponse(
+                {"detail": "Internal Server Error", "request_id": rid},
+                status_code=500,
+            )
         finally:
             dur_ms = int((time.perf_counter() - start) * 1000)
+            if response is None:
+                response = Response(status_code=500)
             # Add the ID to the response for clients to correlate
-            response.headers["X-Request-ID"] = rid
+            try:
+                response.headers["X-Request-ID"] = rid
+            except Exception:
+                pass
             # Structured access log
             self.log.info(
                 "%s %s -> %s %dms",
@@ -41,4 +58,5 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
                 dur_ms,
             )
             request_id_ctx.reset(token)
+
         return response

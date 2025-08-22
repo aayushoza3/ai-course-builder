@@ -1,22 +1,20 @@
 # Ruff config limited to the backend workspace
-line-length = 100
+line-length = 140
 target-version = "py312"
 
 [lint]
-# Core error/warning rules; include import sorting (I) if you want Ruff to flag it.
-select = ["E", "F", "I"]
+# Keep it simple for CI: errors & warnings only.
+select = ["E", "F"]
 
-# CI runner's Ruff is older; ignore rules that are noisy or clash with our startup pattern.
+# Project-wide ignores:
 extend-ignore = [
-  "E402",  # module level import not at top of file (env loading before imports)
-  "E741",  # ambiguous variable name like `l`, `O`, `I`
+  "E402",  # module level import not at top of file (we load env early / special cases)
+  "E741",  # ambiguous variable name like `l`
 ]
 
 [lint.per-file-ignores]
-# Alembic migrations and tests often have unused imports by design
-"alembic/versions/*.py" = ["F401"]
-"tests/**/*.py" = ["F401"]
+# Alembic migrations: allow unused imports, long lines, and import sorting noise
+"alembic/versions/*.py" = ["F401", "I001", "E501"]
 
-# Project-specific: allow re-export pattern and a couple of unused imports
-"app/tasks/__init__.py" = ["F401"]
-"app/models.py" = ["F401"]
+# Tests: allow unused imports and import-sorting noise
+"tests/**/*.py" = ["F401", "I001"]

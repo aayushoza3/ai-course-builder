@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Optional: echo versions for sanity
 python -V || true
 pip -V || true
 celery --version || true
 
-# Start Celery worker in the background.
-# We pass broker/result via flags so you don't have to change your celery_app.py.
-# If your celery_app.py already reads env, these flags are just harmless.
+# Celery reads config from env (CELERY_BROKER_URL, CELERY_RESULT_BACKEND)
+# so we don't pass broker/backend flags here.
+# If your Celery app object path is different, adjust the -A target.
 celery -A app.celery_app.celery_app \
   worker \
   --loglevel=info \
-  --concurrency=1 \
-  ${CELERY_BROKER_URL:+-b "$CELERY_BROKER_URL"} \
-  ${CELERY_RESULT_BACKEND:+--result-backend "$CELERY_RESULT_BACKEND"} &
+  --concurrency="${CELERY_CONCURRENCY:-1}" &
 
-# Start FastAPI (Uvicorn) in the foreground on the port Render provides.
-exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+# If you need beat as well (optional, and can add later):
+# celery -A app.celery_app.celery_app beat --loglevel=info &
+
+# Start FastAPI on the port Render provides
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-10000}"

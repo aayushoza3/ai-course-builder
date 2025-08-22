@@ -4,14 +4,13 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 import certifi
-from dotenv import load_dotenv
-
-# Load .env that sits in backend/
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
+from dotenv import load_dotenv
+
+# Load .env that sits in backend/ (after imports to satisfy Ruff E402)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 def _normalize_db_url(url: str) -> str:
@@ -97,6 +96,7 @@ def make_background_sessionmaker():
     # NullPool ensures no connection is reused across loops/processes
     bg_engine = create_async_engine(
         clean,
+        echo=False,
         pool_pre_ping=True,
         poolclass=NullPool,
         connect_args=connect_args,

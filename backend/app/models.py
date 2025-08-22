@@ -1,7 +1,6 @@
 import datetime as dt
 import sqlalchemy as sa
-from datetime import datetime
-from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, DateTime
+from sqlalchemy import String, Text, Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base

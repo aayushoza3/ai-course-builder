@@ -21,7 +21,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from sqlalchemy.exc import IntegrityError  # for portable fallback
 
 from app.celery_app import celery_app
-from app.database import async_session
+from app.database import make_background_sessionmaker
 from app import models
 
 log = logging.getLogger(__name__)
@@ -356,11 +356,11 @@ async def _insert_resource(db, *, lesson_id: int, url: str, title: str, provider
             # Duplicate -> ignore
             pass
 
-async def _persist(course_id: int, title: str) -> None:
+async def _persist(course_id: int, title: str, BGSession) -> None:
     """Create modules/lessons/resources for the course."""
     outline = _build_outline(title)
 
-    async with async_session() as db:
+    async with BGSession() as db:
         # Attach to course and mark generating (idempotent)
         course = await db.get(models.Course, course_id)
         if not course:
@@ -417,9 +417,9 @@ async def _persist(course_id: int, title: str) -> None:
 
 # ---- Minimal status helpers -------------------------------------------
 
-async def _mark_started(course_id: int, task_id: str) -> None:
+async def _mark_started(course_id: int, task_id: str, BGSession) -> None:
     """Set status=generating, clear last_error, and store Celery task id."""
-    async with async_session() as db:
+    async with BGSession() as db:
         course = await db.get(models.Course, course_id)
         if not course:
             return
@@ -434,9 +434,9 @@ async def _mark_started(course_id: int, task_id: str) -> None:
             course.task_id = task_id
         await db.commit()
 
-async def _mark_failed(course_id: int, err: Exception) -> None:
+async def _mark_failed(course_id: int, err: Exception, BGSession) -> None:
     """Set status=failed and persist a truncated error string."""
-    async with async_session() as db:
+    async with BGSession() as db:
         course = await db.get(models.Course, course_id)
         if not course:
             return
@@ -456,11 +456,13 @@ def generate_course(self, title: str, course_id: int) -> None:
     """
     Celery entrypoint. Ensures task metadata is stored and handles failure by marking the course failed.
     """
+    # Task-local engine/sessionmaker bound to this process/loop
+    bg_engine, BGSession = make_background_sessionmaker()
     try:
         # Make sure DB knows which task is running and clear stale errors.
-        asyncio.run(_mark_started(course_id, task_id=self.request.id))
+        asyncio.run(_mark_started(course_id, task_id=self.request.id, BGSession=BGSession))
         # Do the heavy lifting
-        asyncio.run(_persist(course_id, title))
+        asyncio.run(_persist(course_id, title, BGSession))
     except asyncio.CancelledError:
         # Cooperative cancel: leave status as 'canceled' set by the API; do not mark failed.
         log.info("generate_course canceled for course_id=%s", course_id)
@@ -468,7 +470,12 @@ def generate_course(self, title: str, course_id: int) -> None:
     except Exception as e:
         log.exception("generate_course failed: %s", e)
         try:
-            asyncio.run(_mark_failed(course_id, e))
+            asyncio.run(_mark_failed(course_id, e, BGSession))
         except Exception:
             pass
         raise
+    finally:
+        try:
+            asyncio.run(bg_engine.dispose())
+        except Exception:
+            pass

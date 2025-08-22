@@ -1,0 +1,12 @@
+# Ruff config limited to the backend workspace
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F"]
+fix = true
+
+# Ignore "unused import" in generated migrations and tests
+[lint.per-file-ignores]
+"alembic/versions/*.py" = ["F401"]
+"tests/**/*.py" = ["F401"]

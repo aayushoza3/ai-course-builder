@@ -74,7 +74,7 @@ def _course_to_markdown(course: models.Course) -> str:
             lines.append(mod.summary or "")
 
         lessons = list(mod.lessons or [])
-        lessons.sort(key=lambda l: getattr(l, "id", 0))
+        lessons.sort(key=lambda lesson: getattr(lesson, "id", 0))
 
         for li, lesson in enumerate(lessons, start=1):
             lines.append("")
@@ -126,7 +126,7 @@ def _course_to_zip_bytes(course: models.Course) -> bytes:
 
         for mi, mod in enumerate(modules, start=1):
             lessons = list(mod.lessons or [])
-            lessons.sort(key=lambda l: getattr(l, "id", 0))
+            lessons.sort(key=lambda lesson: getattr(lesson, "id", 0))
 
             for li, lesson in enumerate(lessons, start=1):
                 parts: list[str] = []

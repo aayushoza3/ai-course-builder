@@ -4,12 +4,19 @@
 import { useEffect, useState } from 'react';
 import { createCourse, getStatus, getCourse, regenerateCourse } from '@/lib/api';
 import type { CourseDetail, CourseStatus } from '@/lib/types';
-import Spinner from '@/components/Spinner';
 import StatusBadge from '@/components/StatusBadge';
 import Link from 'next/link';
 import { getLast } from '@/lib/last';
 import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import BackTop from '@/components/BackTop';
+
+type LastState = {
+  courseId: number;
+  courseTitle: string;
+  lessonId?: number;
+  lessonTitle?: string;
+  at?: number;
+};
 
 const TEMPLATES = [
   { title: 'Resume tips for internships', desc: 'Craft a focused, ATS-friendly resume.' },
@@ -26,7 +33,9 @@ export default function HomePage() {
   const [detail, setDetail] = useState<CourseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
-  const last = getLast();
+
+  // Cast the untyped localStorage payload to a concrete shape
+  const last = getLast() as LastState | null;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -38,8 +47,9 @@ export default function HomePage() {
       setStatus((res.status as CourseStatus) ?? 'generating');
       setJobId(res.job_id ?? null);
       setPolling(true);
-    } catch (e: any) {
-      setError(e.message ?? 'Create failed');
+    } catch (e) {
+      const err = e as { message?: string };
+      setError(err?.message ?? 'Create failed');
     }
   }
 
@@ -58,9 +68,10 @@ export default function HomePage() {
           return;
         }
         if (!stop) setTimeout(tick, 1200);
-      } catch (e: any) {
+      } catch (e) {
+        const err = e as { message?: string };
         if (!stop) {
-          setError(e.message ?? 'Polling failed');
+          setError(err?.message ?? 'Polling failed');
           setTimeout(tick, 2500);
         }
       }
@@ -70,23 +81,23 @@ export default function HomePage() {
   }, [polling, courseId]);
 
   return (
-    <div className="stack stack-lg" style={{maxWidth:720, margin:'0 auto'}}>
+    <div className="stack stack-lg" style={{ maxWidth: 720, margin: '0 auto' }}>
       <header className="stack">
         <h1 className="h1">AI Course Builder</h1>
         <p className="text-muted">Describe what you want to learn. We’ll make the course.</p>
       </header>
 
-      {last && (
-        <div className="card row" style={{justifyContent:'space-between'}}>
+      {last ? (
+        <div className="card row" style={{ justifyContent: 'space-between' }}>
           <div className="stack">
             <div className="h2">Continue learning</div>
             <div className="small text-muted">
-              {last.courseTitle}{last.lessonTitle ? ` — ${last.lessonTitle}` : '' }
+              {last.courseTitle}{last.lessonTitle ? ` — ${last.lessonTitle}` : ''}
             </div>
           </div>
           <Link href={`/course/${last.courseId}`} className="btn">Resume</Link>
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleCreate} className="card stack">
         <input
@@ -113,18 +124,23 @@ export default function HomePage() {
       <section className="stack">
         <div className="small text-muted">Or start from a template</div>
         <ul className="grid-tiles">
-          {TEMPLATES.map((t, i)=>(
-            <li key={i} className="card row" style={{justifyContent:'space-between'}}>
+          {TEMPLATES.map((t, i) => (
+            <li key={i} className="card row" style={{ justifyContent: 'space-between' }}>
               <div>
                 <div className="h2">{t.title}</div>
                 <div className="small text-muted">{t.desc}</div>
               </div>
-              <button className="btn" onClick={()=>{
-                setTitle(t.title);
-                setDescription(t.desc);
-                const el = document.querySelector('form') as HTMLFormElement | null;
-                el?.scrollIntoView({behavior:'smooth'});
-              }}>Use</button>
+              <button
+                className="btn"
+                onClick={() => {
+                  setTitle(t.title);
+                  setDescription(t.desc);
+                  const el = document.querySelector('form') as HTMLFormElement | null;
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Use
+              </button>
             </li>
           ))}
         </ul>
@@ -133,7 +149,7 @@ export default function HomePage() {
       {courseId && (
         <section className="stack">
           <div className="row small">
-            <div>Course ID: <span style={{fontWeight:600}}>{courseId}</span></div>
+            <div>Course ID: <span style={{ fontWeight: 600 }}>{courseId}</span></div>
             <StatusBadge status={status} />
             {status === 'generating' && <div className="acb-spinner" />}
             {jobId && <span className="text-muted">job {jobId}</span>}
@@ -158,7 +174,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {error && <p className="small" style={{color:'var(--danger)'}}>{error}</p>}
+      {error && <p className="small" style={{ color: 'var(--danger)' }}>{error}</p>}
 
       <KeyboardShortcuts />
       <BackTop />

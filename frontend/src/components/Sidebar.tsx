@@ -7,6 +7,14 @@ import ThemeToggle from './ThemeToggle';
 import AccentPicker from './AccentPicker';
 import { getLast } from '@/lib/last';
 
+type LastState = {
+  courseId: number;
+  courseTitle: string;
+  lessonId?: number;
+  lessonTitle?: string;
+  at?: number;
+};
+
 const SB_W = 280; // keep in sync with CSS width
 
 function useSidebarState() {
@@ -16,7 +24,6 @@ function useSidebarState() {
     window.addEventListener('acb:sidebar-toggle', handler);
     return () => window.removeEventListener('acb:sidebar-toggle', handler);
   }, []);
-  // close on Escape
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('keydown', esc);
@@ -28,34 +35,31 @@ function useSidebarState() {
 function applyDensity(mode:'cozy'|'compact'){
   const b = document.body;
   if (mode === 'compact') b.classList.add('density-compact'); else b.classList.remove('density-compact');
-  localStorage.setItem('acb_density', mode);
+  try { localStorage.setItem('acb_density', mode); } catch {}
 }
 
 export default function Sidebar(){
   const { open, setOpen } = useSidebarState();
-  const last = useMemo(()=> getLast(), []);
-  const [density, setDensity] = useState<'cozy'|'compact'>(() => (localStorage.getItem('acb_density') as any) || 'cozy');
+
+  // localStorage-only; safe on client
+  const last = useMemo(() => getLast() as LastState | null, []);
+
+  const [density, setDensity] = useState<'cozy'|'compact'>(() => {
+    try {
+      const v = typeof window !== 'undefined' ? localStorage.getItem('acb_density') : null;
+      return (v === 'compact' || v === 'cozy') ? v : 'cozy';
+    } catch { return 'cozy'; }
+  });
 
   useEffect(()=> applyDensity(density), [density]);
 
   return (
     <>
-      {/* overlay for mobile/desktop — shifted so it doesn't cover the sidebar */}
       {open && (
-        <div
-          className="overlay"
-          onClick={()=>setOpen(false)}
-          // keep the blur for the main content, but leave the sidebar area uncovered
-          style={{ left: SB_W }}
-        />
+        <div className="overlay" onClick={()=>setOpen(false)} style={{ left: SB_W }} />
       )}
 
-      <aside
-        id="acb-sidebar"
-        className={`sidebar ${open ? 'open':''}`}
-        // ensure the sidebar is ABOVE the overlay layer
-        style={{ zIndex: 120, width: SB_W }}
-      >
+      <aside id="acb-sidebar" className={`sidebar ${open ? 'open':''}`} style={{ zIndex: 120, width: SB_W }}>
         <div className="sidebar-head">
           <div className="brand">
             <span className="brand-badge">A</span> <span>AI Course Builder</span>
@@ -78,23 +82,12 @@ export default function Sidebar(){
             <select
               className="input select"
               value={density}
-              onChange={(e)=> setDensity(e.target.value as any)}
+              onChange={(e)=> setDensity(e.target.value === 'compact' ? 'compact' : 'cozy')}
             >
               <option value="cozy">Cozy density</option>
               <option value="compact">Compact density</option>
             </select>
           </div>
-        </div>
-
-        <div className="sidebar-sec">
-          <div className="side-title">Shortcuts</div>
-          <ul className="small">
-            <li><span className="kbd">/</span> Focus search</li>
-            <li><span className="kbd">n</span> New course</li>
-            <li><span className="kbd">g</span> then <span className="kbd">m</span> My Courses</li>
-            <li><span className="kbd">Shift</span>+<span className="kbd">E</span> Export (course)</li>
-            <li><span className="kbd">?</span> Toggle help</li>
-          </ul>
         </div>
 
         <div className="sidebar-sec">

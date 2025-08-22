@@ -37,3 +37,7 @@ app.include_router(system.router)
 @app.get("/health", tags=["System"])
 async def health():
     return {"status": "ok"}
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "ai-course-builder-api"}

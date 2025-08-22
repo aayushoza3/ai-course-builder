@@ -38,6 +38,8 @@ jobs:
       OPENAI_MODEL: gpt-4o-mini
       CORS_ORIGINS: http://localhost:5173,*
       API_KEY: ci-test-key
+      # <-- ensure 'app' package is importable during tests
+      PYTHONPATH: ${{ github.workspace }}/backend
 
     steps:
       - uses: actions/checkout@v4
@@ -63,4 +65,4 @@ jobs:
         run: python -m ruff format . --check
 
       - name: Tests
-        run: pytest -q
+        run: python -m pytest -q

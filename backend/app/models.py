@@ -1,6 +1,7 @@
 import datetime as dt
+
 import sqlalchemy as sa
-from sqlalchemy import String, Text, Boolean, ForeignKey
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -15,15 +16,11 @@ class Course(Base):
     description: Mapped[str | None] = mapped_column(
         sa.String(500),
         nullable=True,
-        server_default=""  # empty-string default
+        server_default="",  # empty-string default
     )
 
     # Celery task tracking (stored column)
-    task_id: Mapped[str | None] = mapped_column(
-        sa.String(255),
-        nullable=True,
-        index=True
-    )
+    task_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True, index=True)
 
     # generation status: queued -> generating -> ready | failed
     status: Mapped[str] = mapped_column(
@@ -34,10 +31,7 @@ class Course(Base):
     )
 
     # optional last error message for failures
-    last_error: Mapped[str | None] = mapped_column(
-        sa.String(500),
-        nullable=True
-    )
+    last_error: Mapped[str | None] = mapped_column(sa.String(500), nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(
         server_default=sa.func.now()  # let Postgres fill the timestamp
@@ -86,12 +80,8 @@ class Lesson(Base):
     content_md: Mapped[str] = mapped_column(Text)
 
     module: Mapped["Module"] = relationship(back_populates="lessons")
-    resources: Mapped[list["Resource"]] = relationship(
-        back_populates="lesson", cascade="all, delete-orphan"
-    )
-    quizzes: Mapped[list["Quiz"]] = relationship(
-        back_populates="lesson", cascade="all, delete-orphan"
-    )
+    resources: Mapped[list["Resource"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
+    quizzes: Mapped[list["Quiz"]] = relationship(back_populates="lesson", cascade="all, delete-orphan")
 
 
 class Resource(Base):
@@ -108,9 +98,7 @@ class Resource(Base):
 
     lesson: Mapped["Lesson"] = relationship(back_populates="resources")
 
-    __table_args__ = (
-        sa.UniqueConstraint("lesson_id", "url", name="uq_resource_lesson_url"),
-    )
+    __table_args__ = (sa.UniqueConstraint("lesson_id", "url", name="uq_resource_lesson_url"),)
 
 
 class Quiz(Base):

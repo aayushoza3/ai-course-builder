@@ -8,6 +8,7 @@ from typing import Any, Dict
 
 DEFAULT_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
+
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload: Dict[str, Any] = {
@@ -26,6 +27,7 @@ class JSONFormatter(logging.Formatter):
             except Exception:
                 pass
         return json.dumps(payload, ensure_ascii=False)
+
 
 def setup_logging(level: str | None = None) -> None:
     lvl = getattr(logging, (level or DEFAULT_LEVEL), logging.INFO)

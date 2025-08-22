@@ -1,3 +1,4 @@
+# ruff: noqa: F401
 """add indexes on courses.task_id and created_at
 
 Revision ID: 394d9cb14965
@@ -5,6 +6,7 @@ Revises: 20a822dbb919
 Create Date: 2025-08-14 22:15:54.109934
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,8 +14,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '394d9cb14965'
-down_revision: Union[str, Sequence[str], None] = '20a822dbb919'
+revision: str = "394d9cb14965"
+down_revision: Union[str, Sequence[str], None] = "20a822dbb919"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -36,6 +38,7 @@ def upgrade():
             op.create_index("ix_courses_created_at", "courses", ["created_at"], unique=False, if_not_exists=True)
         except TypeError:
             op.create_index("ix_courses_created_at", "courses", ["created_at"], unique=False)
+
 
 def downgrade():
     bind = op.get_bind()

@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import os
 from typing import Optional
-from fastapi import Security, HTTPException, status
-from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
+
+from fastapi import HTTPException, Security, status
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 # Expose security schemes in OpenAPI so Swagger "Authorize" works
 api_key_header = APIKeyHeader(
@@ -15,6 +16,7 @@ api_key_header = APIKeyHeader(
 
 # Also accept Authorization: Bearer <token>
 http_bearer = HTTPBearer(auto_error=False)
+
 
 async def require_api_key(
     api_key: Optional[str] = Security(api_key_header),

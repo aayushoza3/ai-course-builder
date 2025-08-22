@@ -5,37 +5,38 @@ import io
 import re
 import zipfile
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Response, Security
+import sqlalchemy as sa
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-import sqlalchemy as sa
 
-from app.database import get_session
 from app import models, schemas
+from app.database import get_session
 from app.security import require_api_key
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
+
 def _eager(query):
     return query.options(
-        selectinload(models.Course.modules)
-        .selectinload(models.Module.lessons)
-        .selectinload(models.Lesson.resources),
-        selectinload(models.Course.modules)
-        .selectinload(models.Module.lessons)
-        .selectinload(models.Lesson.quizzes),
+        selectinload(models.Course.modules).selectinload(models.Module.lessons).selectinload(models.Lesson.resources),
+        selectinload(models.Course.modules).selectinload(models.Module.lessons).selectinload(models.Lesson.quizzes),
     )
+
 
 # -------- export helpers --------
 
 _slug_re = re.compile(r"[^a-z0-9]+")
+
+
 def _slugify(s: str, fallback: str = "course") -> str:
     slug = _slug_re.sub("-", (s or "").lower()).strip("-")
     return slug or fallback
+
 
 def _course_to_markdown(course: models.Course) -> str:
     created = getattr(course, "created_at", None)
@@ -114,6 +115,7 @@ def _course_to_markdown(course: models.Course) -> str:
     lines.append("")
     return "\n".join(lines).strip() + "\n"
 
+
 def _course_to_zip_bytes(course: models.Course) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -165,7 +167,9 @@ def _course_to_zip_bytes(course: models.Course) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
+
 # -------- routes --------
+
 
 @router.post("", response_model=schemas.CourseOut, status_code=status.HTTP_201_CREATED)
 async def create_course(
@@ -184,6 +188,7 @@ async def create_course(
 
     # Kick off async generation
     from app.tasks.generate_course import generate_course
+
     async_res = generate_course.delay(payload.title, course.id)
 
     # Track Celery task internally; expose as job_id via schema
@@ -196,11 +201,10 @@ async def create_course(
     await db.commit()
 
     # Re-fetch eagerly to avoid lazy loads during response serialization
-    result = await db.execute(
-        _eager(select(models.Course).where(models.Course.id == course.id))
-    )
+    result = await db.execute(_eager(select(models.Course).where(models.Course.id == course.id)))
     course = result.scalar_one()
     return course
+
 
 @router.get(
     "",
@@ -236,18 +240,10 @@ async def list_courses(
         )
 
     # Total count
-    total = await db.scalar(
-        select(sa.func.count()).select_from(models.Course).where(*conds)
-    )
+    total = await db.scalar(select(sa.func.count()).select_from(models.Course).where(*conds))
 
     # Page query
-    stmt = (
-        select(models.Course)
-        .where(*conds)
-        .order_by(models.Course.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    stmt = select(models.Course).where(*conds).order_by(models.Course.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     items = result.scalars().unique().all()
 
@@ -258,15 +254,15 @@ async def list_courses(
 
     return items
 
+
 @router.get("/{course_id}", response_model=schemas.CourseOut)
 async def get_course(course_id: int, db: AsyncSession = Depends(get_session)):
-    result = await db.execute(
-        _eager(select(models.Course).where(models.Course.id == course_id))
-    )
+    result = await db.execute(_eager(select(models.Course).where(models.Course.id == course_id)))
     course = result.scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return course
+
 
 # Status endpoint (exposes job_id via schema; DB keeps task_id)
 @router.get(
@@ -279,6 +275,7 @@ async def get_course_status(course_id: int, db: AsyncSession = Depends(get_sessi
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return course  # schemas.CourseStatus computes job_id from task_id
+
 
 # Regenerate outline (optionally clearing old modules)
 @router.post(
@@ -315,6 +312,7 @@ async def regenerate_course(
         job_id = getattr(course, "task_id", None)
         if job_id:
             from app.celery_app import celery_app
+
             try:
                 celery_app.control.revoke(job_id, terminate=True)
             except Exception:
@@ -331,6 +329,7 @@ async def regenerate_course(
     await db.commit()
 
     from app.tasks.generate_course import generate_course
+
     async_res = generate_course.delay(course.title, course.id)
 
     if hasattr(course, "status"):
@@ -341,6 +340,7 @@ async def regenerate_course(
     await db.refresh(course)
 
     return course  # schemas.CourseStatus adds job_id + last_error
+
 
 # Lookup a course by job_id (maps to DB task_id)
 @router.get(
@@ -355,7 +355,9 @@ async def get_course_by_job_id(job_id: str, db: AsyncSession = Depends(get_sessi
         raise HTTPException(status_code=404, detail="Course with given job_id not found")
     return course  # schemas.CourseStatus exposes job_id + last_error
 
+
 # ---- Cancel endpoints --------------------------------------------------
+
 
 @router.post(
     "/{course_id}/cancel",
@@ -374,6 +376,7 @@ async def cancel_course_job(
     job_id = getattr(course, "task_id", None)
     if job_id:
         from app.celery_app import celery_app
+
         try:
             celery_app.control.revoke(job_id, terminate=True)
         except Exception:
@@ -386,6 +389,7 @@ async def cancel_course_job(
     await db.commit()
     await db.refresh(course)
     return course
+
 
 @router.post(
     "/by-job/{job_id}/cancel",
@@ -403,6 +407,7 @@ async def cancel_by_job_id(
         raise HTTPException(status_code=404, detail="Course with given job_id not found")
 
     from app.celery_app import celery_app
+
     try:
         celery_app.control.revoke(job_id, terminate=True)
     except Exception:
@@ -416,7 +421,9 @@ async def cancel_by_job_id(
     await db.refresh(course)
     return course
 
+
 # ---- Delete endpoints --------------------------------------------------
+
 
 @router.delete(
     "/{course_id}",
@@ -435,6 +442,7 @@ async def delete_course(
     job_id = getattr(course, "task_id", None)
     if job_id and getattr(course, "status", None) in ("queued", "generating"):
         from app.celery_app import celery_app
+
         try:
             celery_app.control.revoke(job_id, terminate=True)
         except Exception:
@@ -443,6 +451,7 @@ async def delete_course(
     await db.delete(course)  # relies on cascade for modules/lessons/resources
     await db.commit()
     return Response(status_code=204)
+
 
 @router.delete(
     "/by-job/{job_id}",
@@ -460,6 +469,7 @@ async def delete_course_by_job(
 
     if getattr(course, "status", None) in ("queued", "generating"):
         from app.celery_app import celery_app
+
         try:
             celery_app.control.revoke(job_id, terminate=True)
         except Exception:
@@ -469,7 +479,9 @@ async def delete_course_by_job(
     await db.commit()
     return Response(status_code=204)
 
+
 # ---- Export endpoint ---------------------------------------------------
+
 
 @router.get(
     "/{course_id}/export",

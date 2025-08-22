@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, computed_field
 from pydantic.config import ConfigDict
@@ -10,6 +10,7 @@ from pydantic.config import ConfigDict
 StatusLiteral = Literal["queued", "generating", "ready", "failed", "canceled"]
 
 # ---------- Shared / Nested ----------
+
 
 class ResourceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -53,6 +54,7 @@ class ModuleOut(BaseModel):
 
 # ---------- Course Schemas ----------
 
+
 class CourseCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -68,10 +70,7 @@ class CourseBase(BaseModel):
 
     task_id: Optional[str] = Field(None, exclude=True)
 
-    last_error: Optional[str] = Field(
-        default=None,
-        description="Error message from the last generation attempt, if any."
-    )
+    last_error: Optional[str] = Field(default=None, description="Error message from the last generation attempt, if any.")
 
     @computed_field(return_type=Optional[str])
     def job_id(self) -> Optional[str]:
@@ -107,14 +106,14 @@ class CourseOut(CourseBase):
                                         "id": 5001,
                                         "lesson_id": 1001,
                                         "url": "https://realpython.com/fastapi-tutorial/",
-                                        "title": "Real Python – FastAPI Intro"
+                                        "title": "Real Python – FastAPI Intro",
                                     }
                                 ],
-                                "quizzes": []
+                                "quizzes": [],
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             }
         },
     )
@@ -134,7 +133,7 @@ class CourseListItem(CourseBase):
                 "status": "queued",
                 "created_at": "2025-08-14T19:52:00Z",
                 "job_id": "a7f4f7e1-2c8f-4c43-bb25-9a5f6d9a0b3e",
-                "last_error": None
+                "last_error": None,
             }
         },
     )
@@ -146,12 +145,7 @@ class CourseStatus(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         json_schema_extra={
-            "example": {
-                "id": 42,
-                "status": "generating",
-                "job_id": "a7f4f7e1-2c8f-4c43-bb25-9a5f6d9a0b3e",
-                "last_error": None
-            }
+            "example": {"id": 42, "status": "generating", "job_id": "a7f4f7e1-2c8f-4c43-bb25-9a5f6d9a0b3e", "last_error": None}
         },
     )
 

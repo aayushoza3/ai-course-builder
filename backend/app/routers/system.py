@@ -6,15 +6,17 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.celery_app import celery_app
+from app.database import get_session
 
 router = APIRouter(prefix="/system", tags=["System"])
+
 
 @router.get("/healthz", summary="Liveness check")
 async def healthz():
     # Simple "process is up" signal
     return {"status": "ok"}
+
 
 @router.get("/readyz", summary="Readiness check (DB + Celery workers)")
 async def readyz(db: AsyncSession = Depends(get_session)):

@@ -1,28 +1,28 @@
 # app/tasks/generate_course.py
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import os
 import re
-import json
-import asyncio
-import logging
 from typing import Any, Dict, List, Tuple
 from urllib.parse import (
+    parse_qsl,
     quote_plus,
+    urlencode,
     urlparse,
     urlunparse,
-    parse_qsl,
-    urlencode,
 )
 
 import requests
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
 from sqlalchemy.exc import IntegrityError  # for portable fallback
 
+from app import models
 from app.celery_app import celery_app
 from app.database import make_background_sessionmaker
-from app import models
 
 log = logging.getLogger(__name__)
 
@@ -33,9 +33,8 @@ llm = ChatOpenAI(model=MODEL_NAME, temperature=0.3)
 
 # ---- Tiny web helpers --------------------------------------------------
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; CourseBuilderBot/1.0; +https://example.local)"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CourseBuilderBot/1.0; +https://example.local)"}
+
 
 def _fetch(url: str, params: Dict[str, Any] | None = None, timeout: float = 8.0) -> requests.Response | None:
     try:
@@ -45,6 +44,7 @@ def _fetch(url: str, params: Dict[str, Any] | None = None, timeout: float = 8.0)
     except Exception as e:
         log.debug("fetch error %s -> %s", url, e)
     return None
+
 
 # SERP link extraction
 _LINK_RE = re.compile(r'href="(https?://[^"]+)"', re.I)
@@ -68,6 +68,7 @@ _SKIP_URL_SUBSTR = (
     "/setprefs?",
 )
 
+
 def _extract_links(html: str) -> List[str]:
     urls: List[str] = []
     for m in _LINK_RE.finditer(html):
@@ -88,6 +89,7 @@ def _extract_links(html: str) -> List[str]:
             seen.add(u)
             out.append(u)
     return out
+
 
 def search_web(query: str, n: int = 4) -> List[Dict[str, str]]:
     """Very lightweight meta-search: wikipedia opensearch + 2 SERPs (regex)."""
@@ -121,6 +123,7 @@ def search_web(query: str, n: int = 4) -> List[Dict[str, str]]:
 
     return items[: max(n, 1)]
 
+
 def search_yt(query: str, n: int = 2) -> List[Dict[str, str]]:
     """Super-simple YouTube search by scraping IDs."""
     url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
@@ -137,6 +140,7 @@ def search_yt(query: str, n: int = 2) -> List[Dict[str, str]]:
                 }
             )
     return out
+
 
 # ---- Resource normalization (de-dupe, clean titles/providers) ----------
 
@@ -161,6 +165,7 @@ _TRACKING_KEYS = {
 }
 
 _YT_HOSTS = {"youtube.com", "m.youtube.com", "youtu.be"}
+
 
 def _canonicalize_url(raw: str) -> Tuple[str, str]:
     """
@@ -195,6 +200,7 @@ def _canonicalize_url(raw: str) -> Tuple[str, str]:
     except Exception:
         return raw, raw
 
+
 def _dedupe_resources(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
     seen: set[str] = set()
     out: List[Dict[str, str]] = []
@@ -211,6 +217,7 @@ def _dedupe_resources(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
         out.append(it)
     return out
 
+
 def _clean_title(title: str | None) -> str:
     t = re.sub(r"\s+", " ", (title or "")).strip()
     t = re.sub(r"^\s*(W3Schools|GeeksforGeeks|DataCamp|Real Python)\s*[-|:]\s*", "", t, flags=re.I)
@@ -223,6 +230,7 @@ def _clean_title(title: str | None) -> str:
             pass
     return (t or "Reference")[:255]
 
+
 def _infer_provider(url: str, provider: str | None) -> str:
     if provider and provider != "auto":
         return provider[:100]
@@ -230,6 +238,7 @@ def _infer_provider(url: str, provider: str | None) -> str:
     if host in _YT_HOSTS:
         return "youtube"
     return (host or "web")[:100]
+
 
 def _normalize_resources(raw: List[Dict[str, str]]) -> List[Dict[str, str]]:
     # canonicalize/dedupe first
@@ -253,7 +262,9 @@ def _normalize_resources(raw: List[Dict[str, str]]) -> List[Dict[str, str]]:
     # unique again after cleaning
     return _dedupe_resources(norm)
 
+
 # ---- Lesson content generation ----------------------------------------
+
 
 def gen_lesson_md(course_title: str, lesson_title: str) -> str:
     """
@@ -283,7 +294,9 @@ def gen_lesson_md(course_title: str, lesson_title: str) -> str:
         log.warning("gen_lesson_md failed for %s / %s: %s", course_title, lesson_title, e)
         return ""
 
+
 # ---- Outline generation ------------------------------------------------
+
 
 def _build_outline(title: str) -> List[Dict[str, Any]]:
     """Ask the LLM for a JSON outline."""
@@ -318,7 +331,9 @@ def _build_outline(title: str) -> List[Dict[str, Any]]:
         {"title": "Wrap Up", "lessons": ["Project", "Next Steps", "Resources"]},
     ]
 
+
 # ---- Cancellation helpers ---------------------------------------------
+
 
 async def _ensure_not_canceled(db, course_id: int) -> None:
     """Raise CancelledError if the course was canceled."""
@@ -328,7 +343,9 @@ async def _ensure_not_canceled(db, course_id: int) -> None:
     if getattr(course, "status", None) == "canceled":
         raise asyncio.CancelledError()
 
+
 # ---- Persistence -------------------------------------------------------
+
 
 async def _insert_resource(db, *, lesson_id: int, url: str, title: str, provider: str) -> None:
     """
@@ -340,6 +357,7 @@ async def _insert_resource(db, *, lesson_id: int, url: str, title: str, provider
     try:
         # Fast path for Postgres
         from sqlalchemy.dialects.postgresql import insert as pg_insert  # type: ignore
+
         stmt = (
             pg_insert(models.Resource.__table__)
             .values(lesson_id=lesson_id, url=url, title=title, provider=provider)
@@ -355,6 +373,7 @@ async def _insert_resource(db, *, lesson_id: int, url: str, title: str, provider
         except IntegrityError:
             # Duplicate -> ignore
             pass
+
 
 async def _persist(course_id: int, title: str, BGSession) -> None:
     """Create modules/lessons/resources for the course."""
@@ -415,7 +434,9 @@ async def _persist(course_id: int, title: str, BGSession) -> None:
             course.status = "ready"
         await db.commit()
 
+
 # ---- Minimal status helpers -------------------------------------------
+
 
 async def _mark_started(course_id: int, task_id: str, BGSession) -> None:
     """Set status=generating, clear last_error, and store Celery task id."""
@@ -434,6 +455,7 @@ async def _mark_started(course_id: int, task_id: str, BGSession) -> None:
             course.task_id = task_id
         await db.commit()
 
+
 async def _mark_failed(course_id: int, err: Exception, BGSession) -> None:
     """Set status=failed and persist a truncated error string."""
     async with BGSession() as db:
@@ -449,7 +471,9 @@ async def _mark_failed(course_id: int, err: Exception, BGSession) -> None:
             course.last_error = str(err)[:500]
         await db.commit()
 
+
 # ---- Celery task -------------------------------------------------------
+
 
 @celery_app.task(name="app.tasks.generate_course.generate_course", bind=True)
 def generate_course(self, title: str, course_id: int) -> None:

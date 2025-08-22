@@ -1,13 +1,13 @@
 import os
 import ssl
 from pathlib import Path
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import certifi
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
-from dotenv import load_dotenv
 
 # Load .env that sits in backend/ (after imports to satisfy Ruff E402)
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -72,6 +72,7 @@ async_session = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncS
 
 class Base(DeclarativeBase):
     """Shared metadata for all models."""
+
     pass
 
 
@@ -104,4 +105,6 @@ def make_background_sessionmaker():
     )
     BGSession = async_sessionmaker(bg_engine, expire_on_commit=False, class_=AsyncSession)
     return bg_engine, BGSession
-#I am iron man
+
+
+# I am iron man

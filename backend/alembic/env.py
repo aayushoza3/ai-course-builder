@@ -1,20 +1,21 @@
 """
 Alembic environment script (async version) – AI Course Builder
 """
+
 import asyncio
 import ssl
 from logging.config import fileConfig
 from pathlib import Path
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import certifi
-from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
-from dotenv import load_dotenv
 
-from app.database import Base, DATABASE_URL
 import app.models  # noqa: F401
+from alembic import context
+from app.database import DATABASE_URL, Base
 
 # Load .env that sits in backend/ (do this after all imports to satisfy Ruff E402)
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")

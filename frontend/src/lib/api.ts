@@ -1,7 +1,7 @@
 // src/lib/api.ts
 import type { CourseDetail } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 const API_KEY  = process.env.NEXT_PUBLIC_API_KEY  ?? 'dev-key';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {

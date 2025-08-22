@@ -1,33 +1,35 @@
 # backend/tests/test_smoke.py
-from httpx import Client, ASGITransport
 import pytest
+from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 
 
-def _client() -> Client:
-    # httpx>=0.27: use ASGITransport with the ASGI app; sync client so no anyio backend needed
-    transport = ASGITransport(app=app)
-    return Client(transport=transport, base_url="http://test")
+# Force AnyIO to use asyncio only (avoids Trio dependency in CI)
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
 
 
-def test_healthz():
-    with _client() as c:
-        r = c.get("/health")
+@pytest.mark.anyio
+async def test_healthz():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        r = await ac.get("/health")
         assert r.status_code == 200
 
 
-def test_mutations_require_api_key_and_succeed_with_key(monkeypatch):
+@pytest.mark.anyio
+async def test_mutations_require_api_key_and_succeed_with_key(monkeypatch):
     # Enforce API key for this test run
     monkeypatch.setenv("API_KEY", "ci-test-key")
 
-    with _client() as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # No key -> should be unauthorized/forbidden
-        r = c.post("/courses", json={"title": "smoke", "description": "string"})
+        r = await ac.post("/courses", json={"title": "smoke", "description": "string"})
         assert r.status_code in (401, 403)
 
         # With key -> should succeed (just enqueues a Celery task)
-        r = c.post(
+        r = await ac.post(
             "/courses",
             json={"title": "smoke ok", "description": "string"},
             headers={"X-API-Key": "ci-test-key"},
@@ -35,17 +37,18 @@ def test_mutations_require_api_key_and_succeed_with_key(monkeypatch):
         assert r.status_code == 201
 
 
-def test_list_courses_pagination_headers_present(monkeypatch):
+@pytest.mark.anyio
+async def test_list_courses_pagination_headers_present(monkeypatch):
     monkeypatch.setenv("API_KEY", "ci-test-key")
 
-    with _client() as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # ensure at least one item exists
-        c.post(
+        await ac.post(
             "/courses",
             json={"title": "headers", "description": "s"},
             headers={"X-API-Key": "ci-test-key"},
         )
-        r = c.get("/courses")
+        r = await ac.get("/courses")
 
     assert r.status_code == 200
     for h in ("X-Total-Count", "X-Limit", "X-Offset"):

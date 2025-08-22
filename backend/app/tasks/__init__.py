@@ -1,0 +1,1 @@
+from .generate_course import generate_course

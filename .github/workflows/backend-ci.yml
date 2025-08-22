@@ -1,0 +1,65 @@
+name: backend-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: coursebuilder
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: ai_course_builder_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U coursebuilder -d ai_course_builder_ci"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=20
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://coursebuilder:devpass@localhost:5432/ai_course_builder_ci
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      OPENAI_API_KEY: "sk-placeholder"
+      OPENAI_MODEL: gpt-4o-mini
+      CORS_ORIGINS: http://localhost:5173,*
+      API_KEY: ci-test-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff black pytest
+
+      - name: Run Alembic migrations
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Lint
+        working-directory: backend
+        run: |
+          ruff check .
+          black --check .
+
+      - name: Tests
+        working-directory: backend
+        run: pytest -q
